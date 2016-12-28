@@ -187,4 +187,7 @@
     <!-- Approximates the system status bar height. Not guaranteed to be always be correct. -->
     <dimen name="status_bar_height">24dp</dimen>
 
+    <dimen name="phone_size_width">320dp</dimen>
+    <dimen name="phone_size_height">480dp</dimen>
+
 </resources>

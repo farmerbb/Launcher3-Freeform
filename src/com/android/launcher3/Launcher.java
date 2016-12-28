@@ -52,6 +52,7 @@ import android.graphics.Canvas;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.hardware.display.DisplayManager;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
@@ -163,6 +164,10 @@ public class Launcher extends Activity
     private static final int REQUEST_PERMISSION_CALL_PHONE = 13;
 
     private static final float BOUNCE_ANIMATION_TENSION = 1.3f;
+
+    private static final int FULLSCREEN = 0;
+    private static final int LEFT = -1;
+    private static final int RIGHT = 1;
 
     /**
      * IntentStarter uses request codes starting with this. This must be greater than all activity
@@ -1151,9 +1156,7 @@ public class Launcher extends Activity
         if (mLauncherCallbacks != null) {
             return mLauncherCallbacks.hasSettings();
         } else {
-            // On devices with a locked orientation, we will at least have the allow rotation
-            // setting.
-            return !getResources().getBoolean(R.bool.allow_rotation);
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N;
         }
     }
 
@@ -2793,7 +2796,36 @@ public class Launcher extends Activity
                     height = bounds.height();
                 }
             }
-            return ActivityOptions.makeClipRevealAnimation(v, left, top, width, height).toBundle();
+
+            SharedPreferences pref = getSharedPreferences("com.android.launcher3.prefs", Context.MODE_PRIVATE);
+            if(Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !pref.getBoolean("allow_freeform_mode", true))
+                return ActivityOptions.makeClipRevealAnimation(v, left, top, width, height).toBundle();
+            else {
+                Rect rect = null;
+
+                switch(pref.getString("window_size", "standard")) {
+                    case "standard":
+                        rect = launchMode1(1);
+                        break;
+                    case "large":
+                        rect = launchMode1(2);
+                        break;
+                    case "fullscreen":
+                        rect = launchMode2(FULLSCREEN);
+                        break;
+                    case "half_left":
+                        rect = launchMode2(LEFT);
+                        break;
+                    case "half_right":
+                        rect = launchMode2(RIGHT);
+                        break;
+                    case "phone_size":
+                        rect = launchMode3();
+                        break;
+                }
+
+                return ActivityOptions.makeClipRevealAnimation(v, left, top, width, height).setLaunchBounds(rect).toBundle();
+            }
         } else if (Utilities.ATLEAST_LOLLIPOP_MR1) {
             // On L devices, we use the device default slide-up transition.
             // On L MR1 devices, we use a custom version of the slide-up transition which
@@ -2802,6 +2834,77 @@ public class Launcher extends Activity
                     this, R.anim.task_open_enter, R.anim.no_anim).toBundle();
         }
         return null;
+    }
+
+    @SuppressWarnings("deprecation")
+    @TargetApi(Build.VERSION_CODES.N)
+    private Rect launchMode1(int factor) {
+        DisplayManager dm = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+        Display display = dm.getDisplay(Display.DEFAULT_DISPLAY);
+
+        int width1 = display.getWidth() / (4 * factor);
+        int width2 = display.getWidth() - width1;
+        int height1 = display.getHeight() / (4 * factor);
+        int height2 = display.getHeight() - height1;
+
+        return new Rect(
+                width1,
+                height1,
+                width2,
+                height2
+        );
+    }
+
+    @SuppressWarnings("deprecation")
+    @TargetApi(Build.VERSION_CODES.N)
+    private Rect launchMode2(int launchType) {
+        DisplayManager dm = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+        Display display = dm.getDisplay(Display.DEFAULT_DISPLAY);
+
+        boolean isPortrait = getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
+        boolean isLandscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+
+        int left = launchType == RIGHT && isLandscape
+                ? display.getWidth() / 2
+                : 0;
+
+        int top = launchType == RIGHT && isPortrait
+                ? display.getHeight() / 2
+                : 0;
+
+        int right = launchType == LEFT && isLandscape
+                ? display.getWidth() / 2
+                : display.getWidth();
+
+        int bottom = launchType == LEFT && isPortrait
+                ? display.getHeight() / 2
+                : display.getHeight();
+
+        return new Rect(
+                left,
+                top,
+                right,
+                bottom
+        );
+    }
+
+    @SuppressWarnings("deprecation")
+    @TargetApi(Build.VERSION_CODES.N)
+    private Rect launchMode3() {
+        DisplayManager dm = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+        Display display = dm.getDisplay(Display.DEFAULT_DISPLAY);
+
+        int width1 = display.getWidth() / 2;
+        int width2 = getResources().getDimensionPixelSize(R.dimen.phone_size_width) / 2;
+        int height1 = display.getHeight() / 2;
+        int height2 = getResources().getDimensionPixelSize(R.dimen.phone_size_height) / 2;
+
+        return new Rect(
+                width1 - width2,
+                height1 - height2,
+                width1 + width2,
+                height1 + height2
+        );
     }
 
     private Rect getViewBounds(View v) {

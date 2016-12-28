@@ -18,9 +18,13 @@ package com.android.launcher3;
 
 import android.app.Activity;
 import android.content.ContentResolver;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.ContentObserver;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceFragment;
 import android.provider.Settings;
@@ -53,6 +57,9 @@ public class SettingsActivity extends Activity {
             getPreferenceManager().setSharedPreferencesName(LauncherFiles.SHARED_PREFERENCES_KEY);
             addPreferencesFromResource(R.xml.launcher_preferences);
 
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+                bindPreferenceSummaryToValue(findPreference("window_size"));
+
             // Setup allow rotation preference
             Preference rotationPref = findPreference(Utilities.ALLOW_ROTATION_PREFERENCE_KEY);
             if (getResources().getBoolean(R.bool.allow_rotation)) {
@@ -81,6 +88,40 @@ public class SettingsActivity extends Activity {
                 mRotationLockObserver = null;
             }
             super.onDestroy();
+        }
+
+        private Preference.OnPreferenceChangeListener sBindPreferenceSummaryToValueListener = new Preference.OnPreferenceChangeListener() {
+            @Override
+            public boolean onPreferenceChange(Preference preference, Object value) {
+                String stringValue = value.toString();
+
+                if(preference instanceof ListPreference) {
+                    // For list preferences, look up the correct display value in
+                    // the preference's 'entries' list.
+                    ListPreference listPreference = (ListPreference) preference;
+                    int index = listPreference.findIndexOfValue(stringValue);
+
+                    // Set the summary to reflect the new value.
+                    preference.setSummary(index >= 0 ? listPreference.getEntries()[index] : null);
+
+                } else {
+                    // For all other preferences, set the summary to the value's
+                    // simple string representation.
+                    preference.setSummary(stringValue);
+                }
+
+                return true;
+            }
+        };
+
+        void bindPreferenceSummaryToValue(Preference preference) {
+            // Set the listener to watch for value changes.
+            preference.setOnPreferenceChangeListener(sBindPreferenceSummaryToValueListener);
+
+            // Trigger the listener immediately with the preference's
+            // current value.
+            SharedPreferences pref = getActivity().getSharedPreferences("com.android.launcher3.prefs", Context.MODE_PRIVATE);
+            sBindPreferenceSummaryToValueListener.onPreferenceChange(preference, pref.getString(preference.getKey(), ""));
         }
     }
 
